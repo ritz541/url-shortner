@@ -13,7 +13,8 @@ def init_db():
     CREATE TABLE IF NOT EXISTS urls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     short_code TEXT UNIQUE NOT NULL,
-    long_url TEXT NOT NULL
+    long_url TEXT NOT NULL,
+    clicks INTEGER DEFAULT 0
     )
 """)
     conn.commit()
@@ -32,16 +33,39 @@ def save_url(short_code: str, long_url: str):
     conn.commit()
     conn.close()
 
-def get_url(short_code: str):
+def get_url_and_increment_clicks(short_code: str):
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
+
     cur.execute(
-        "SELECT long_url FROM urls WHERE short_code = ?", (short_code,)
+        "SELECT long_url, clicks FROM urls WHERE short_code = ?", (short_code,)
+    )
+    row = cur.fetchone()
+    
+    if not row:
+        conn.close()
+        return None
+    
+    long_url, clicks = row
+
+    cur.execute(
+        "UPDATE urls SET clicks = clicks + 1 WHERE short_code = ?", (short_code,)
+    )
+    conn.commit()
+    conn.close()
+
+    return long_url
+
+def get_stats(short_code: str) -> list:
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT long_url, clicks FROM urls WHERE short_code = ?", (short_code,)
     )
     row = cur.fetchone()
     conn.close()
-    return row[0] if row else None
-
+    return row
 
 def main():
     init_db()
@@ -65,11 +89,22 @@ def main():
 
     elif command == "expand":
         short_code = args[1]
-        long_url = get_url(short_code)
+        long_url = get_url_and_increment_clicks(short_code)
 
         if long_url:
             print("Long URL: ", long_url)
         else: 
+            print("Not found!")
+    
+    elif command == "stats":
+        short_code = args[1]
+        row = get_stats(short_code)
+
+        if row:
+            long_url, clicks = row
+            print("URL: ", long_url)
+            print("Clicks: ", clicks)
+        else:
             print("Not found!")
 
     else:
